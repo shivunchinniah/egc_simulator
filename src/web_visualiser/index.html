@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elevator Visualiser</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css"
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+        integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js"
+        integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js"
+        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+        crossorigin="anonymous"></script>
+</head>
+
+<body>
+
+    <div class="container mt-5">
+        <div class="row">
+
+            <div class="col">
+
+                <canvas id="canvas" width="1000" height="2000"
+                    style="max-height: 90vh; border: solid black 2px;"></canvas>
+
+            </div>
+
+            <div class="col">
+                <input type="file" id="file">
+                <br>
+                <input type="range" id="timeline" style="width: 100%;">
+                <br>
+
+                <table>
+                    <tr>
+                        <td>
+                            Start:
+                        </td>
+                        <td>
+                            <input type="number" id="start" disabled>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            End:
+                        </td>
+                        <td>
+                            <input type="number" id="end" disabled>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Current:
+                        </td>
+                        <td>
+                            <input type="text" id="current" disabled>
+                        </td>
+                    </tr>
+
+                </table>
+
+                <br>
+
+                <button onclick="startPlay()">Play</button>
+                <button onclick="pause()">Pause</button>
+                <input type="number" id="multiplier">
+
+                <img style="width: 100%;" id="distribution">
+
+            </div>
+
+        </div>
+    </div>
+
+
+    <script>
+
+        let data = []
+
+        let current = 0
+        let start = 0
+        let end = 0
+
+        function formatCurrent(current){
+           return new Date(current * 1000).toISOString().slice(11,22)
+        }
+
+        function updateInterface() {
+            document.getElementById('start').value = start
+            document.getElementById('end').value = end
+            timeline.min = start
+            timeline.max = end
+            document.getElementById('current').value = formatCurrent(current)
+            document.getElementById('multiplier').value = multiplier
+
+            renderScene()
+        }
+
+        document.getElementById('multiplier').addEventListener('change', (e) =>{
+            multiplier = e.target.value
+        })
+
+        function renderScene() {
+
+
+            const building = {
+                floors: data[0].queue.length,
+                floor_height: 4,
+                elevators: data[0].elevators.length
+            }
+
+            const [elevators, up, down, queue] = interpolateElevator(current)
+
+            drawBuilding(building, elevators, up, down, queue)
+        }
+
+        function findIndexBeforeEqual(current) {
+            let index = 0
+            let c = data[0].time
+            while (c < current) {
+                c = data[++index].time
+            }
+
+            if (index == 0)
+                return 0
+
+
+            return index - 1
+        }
+
+        let run = false
+        let lastTime = 0
+        const dt = (1/30) * 1000
+        let multiplier = 1
+
+        function startPlay(){
+            run = true
+            lastTime = Date.now()
+            play()
+        }
+
+        function play(){
+            // console.log('play', lastTime, Date.now())
+
+            const now = Date.now()
+         
+            current = (1*current) + 1*(multiplier * (now - lastTime)) / 1000
+
+            lastTime = now
+
+            updateInterface()
+
+            if(run) setTimeout(play, dt)
+        }
+        
+        function pause(){
+            run = false
+        }
+
+
+        function interpolateElevator(current) {
+            const index_before = findIndexBeforeEqual(current)
+            const index_after = index_before + 1
+
+            const start = data[index_before].time
+            const end = data[index_after].time
+            const scaleFactor = (current - start) / (end - start)
+
+            let elevators = []
+
+            for (let i = 0; i < data[index_before].elevators.length; i++) {
+                // const elevator_before = JSON.parse(data[index_before].elevators[i].replaceAll("\'", "\"").replaceAll("None", "0"))
+                const elevator_before = data[index_before].elevators[i]
+                const pos_before = elevator_before.position
+                // const pos_after = JSON.parse(data[index_after].elevators[i].replaceAll("\'", "\"").replaceAll("None", "0")).position
+                const pos_after = data[index_after].elevators[i].position
+
+                const pos = (pos_before != pos_after) ? pos_before + (scaleFactor * (pos_after - pos_before)) : pos_before
+                elevators.push({ position: pos, state: elevator_before.state, passengers: elevator_before.passengers })
+
+                // if (pos >= 40) console.log(pos_a, pos_b, start, end, scaleFactor)
+            }
+
+
+            return [elevators, data[index_before].buttons.up, data[index_before].buttons.down, data[index_before].queue]
+
+        }
+
+        document.getElementById('timeline').addEventListener("input", (e) => {
+            current = parseInt(e.target.value)
+            // run = false
+            lastTime = Date.now()
+            updateInterface()
+        })
+
+        let distribution = ""
+        let sp = {}
+
+        function readSingleFile(e) {
+            var file = e.target.files[0]
+            if (!file) {
+                return
+            }
+
+            console.log('loading file...')
+
+            var reader = new FileReader()
+            reader.addEventListener("load", e => {
+                console.log('File loaded')
+
+                const db = JSON.parse(reader.result)
+                data = db.log
+                sp = db.sp
+                distribution = db.distribution
+                start = data[0].time
+                end = data[data.length - 1].time
+                current = start
+
+                document.getElementById('distribution').src = "data:image/jpeg;base64," + distribution.replace("b\'", "").replace("\'", "")
+
+                updateInterface()
+
+            })
+
+            reader.readAsText(file)
+        }
+
+        document.getElementById('file').addEventListener('change', readSingleFile, false)
+
+        const building = {
+            floors: 25,
+            floor_height: 4,
+            elevators: 3
+        }
+
+        const genElevators = () => {
+            let out = []
+            for (let i = 0; i < 80; i++) {
+                out.push({
+                    position: 5,
+                    state: 'Idle',
+                    passengers: 0
+                })
+            }
+            return out
+        }
+
+        const elevators = genElevators()
+
+        function drawBuilding(building, elevators, upButtons, downButtons, queue) {
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+            const buildingHeight = 0.95 * canvas.height
+
+            const buildingWidth = 0.5 * canvas.width
+
+            const buildingX = (canvas.width - buildingWidth) / 8
+            const buildingY = (canvas.height - buildingHeight) / 2
+
+            // draw building rectangle
+            ctx.lineWidth = 4
+            ctx.strokeStyle = 'black'
+            ctx.strokeRect(buildingX, buildingY, buildingWidth, buildingHeight)
+
+            const floorHeight = buildingHeight / building.floors
+            const textSize = floorHeight * 0.6
+            ctx.strokeStyle = '#37373D'
+            // draw floors
+            for (let i = 0; i < building.floors; i++) {
+
+                ctx.lineWidth = 4
+                ctx.beginPath()
+                const h = buildingY + buildingHeight - (i * floorHeight)
+                ctx.moveTo(buildingX, h)
+                ctx.lineTo(buildingX + buildingWidth, h)
+                ctx.stroke()
+
+                const offset = 20
+                const width = 50
+
+
+                ctx.lineWidth = 3
+                ctx.fillStyle = '#F1CE67'
+
+                // draw up arrow
+                ctx.beginPath()
+                ctx.moveTo(buildingWidth + buildingX + offset, h)
+                ctx.lineTo(buildingWidth + buildingX + offset + width, h)
+                ctx.lineTo(buildingWidth + buildingX + offset + width / 2, h - 0.6 * floorHeight)
+                ctx.lineTo(buildingWidth + buildingX + offset, h)
+                upButtons[i] ? ctx.fill() : ctx.stroke()
+
+                // draw down up arrow
+                ctx.beginPath()
+                ctx.moveTo(buildingWidth + buildingX + 2 * offset + width + width / 2, h)
+                ctx.lineTo(buildingWidth + buildingX + 2 * offset + width + width, h - 0.6 * floorHeight)
+                ctx.lineTo(buildingWidth + buildingX + 2 * offset + width, h - 0.6 * floorHeight)
+                ctx.lineTo(buildingWidth + buildingX + 2 * offset + width + width / 2, h)
+                downButtons[i] ? ctx.fill() : ctx.stroke()
+
+
+                // draw number of people waiting
+                ctx.fillStyle = 'black'
+                ctx.font = textSize + 'px sanserif'
+                ctx.fillText(queue[i], buildingWidth + buildingX + 3 * offset + 2*width, h)
+
+            }
+
+
+
+
+            const Kf = buildingHeight / (building.floors * building.floor_height)
+
+            const elevatorWidth = buildingWidth * 0.6 / building.elevators
+            const elevatorSpacing = (buildingWidth / building.elevators - (elevatorWidth))
+
+            // draw elevators
+            let elevatorX = buildingX + elevatorSpacing / 2
+
+
+
+            for (let i = 0; i < building.elevators; i++) {
+                //draw elevator car
+                switch (elevators[i].state) {
+                    case 'Idle':
+                        ctx.fillStyle = 'gray'
+                        break
+                    case 'Travelling':
+                        ctx.fillStyle = 'green'
+                        break
+                    case 'Loading':
+                        ctx.fillStyle = 'orange'
+                        break
+                    case 'Offloading':
+                        ctx.fillStyle = 'purple'
+                        break
+                }
+
+                const elevatorH = (buildingY + buildingHeight) - (elevators[i].position * Kf + floorHeight)
+                ctx.fillRect(elevatorX, elevatorH, elevatorWidth, floorHeight)
+
+                ctx.fillStyle = 'white'
+                ctx.font = textSize + 'px sanserif'
+                ctx.fillText(elevators[i].passengers, elevatorX, elevatorH + floorHeight - (Math.abs(textSize - floorHeight) / 2))
+
+                elevatorX += elevatorSpacing + elevatorWidth
+            }
+
+
+
+        }
+
+        const canvas = document.getElementById('canvas')
+        const ctx = canvas.getContext('2d')
+
+        // ctx.fillStyle = "red"
+
+        // ctx.fillRect(100, 100, 200, 200)
+
+        drawBuilding(building, elevators, new Array(80).fill(false), new Array(80).fill(false), new Array(80).fill(0))
+
+
+    </script>
+
+
+
+</body>
+
+</html>
