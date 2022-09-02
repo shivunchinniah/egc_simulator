@@ -1,4 +1,5 @@
 
+from ast import Pass
 import math
 import queue
 import random
@@ -60,6 +61,7 @@ class SimulationScene:
         self.controller = controller
         self.prevState = None
         self.log = []
+        self.delayedPassengers = []
 
 
 
@@ -74,33 +76,47 @@ class SimulationScene:
             'queue': [len(x) for x in self.queue]
         }
 
+    def triggerPassenger(self, passenger):
+        p_from = passenger.route[passenger.route_index]
+        p_to = passenger.route[passenger.route_index + 1]
+        # trigger button event & add passenger to relevant queue
+        if p_from < p_to:
+            self.controller.up(p_from)
+            self.queue[p_from].append((Elevator.Directions.Up, passenger))
+        else:
+            self.controller.down(p_from)
+            self.queue[p_from].append(
+                (Elevator.Directions.Down, passenger))
+
+        passenger.state = Passenger.States.Waiting
+
+        self.toUpdate.append(passenger)
+
+            # print('dispatched passenger ', self.time, p_from, '-->', p_to)
+
+
     def tick(self):
+
+        # check if delayed passengers have reached their destination
+        for passenger in self.delayedPassengers:
+            if passenger.state == Passenger.States.Idle:
+                self.triggerPassenger(passenger)
+                self.delayedPassengers.remove(passenger)
 
         if self.traffic_index < len(self.traffic_times):
             # check if time to dispatch passenger
             if (self.time >= self.traffic_times[self.traffic_index]):
                 passenger = self.passengers[self.traffic_passengers[
                     self.traffic_index]]
-                self.traffic_index = self.traffic_index + 1
+                self.traffic_index += 1
 
-                # push the passenger to the queue
-                p_from = passenger.route[passenger.route_index]
-                p_to = passenger.route[passenger.route_index + 1]
-
-                # trigger button event & add passenger to relevant queue
-                if p_from < p_to:
-                    self.controller.up(p_from)
-                    self.queue[p_from].append((Elevator.Directions.Up, passenger))
+                # first check if the passenger is idle
+                if(passenger.state == Passenger.States.Idle):
+                    # push the passenger to the queue
+                    self.triggerPassenger(passenger)
                 else:
-                    self.controller.down(p_from)
-                    self.queue[p_from].append(
-                        (Elevator.Directions.Down, passenger))
-
-                passenger.state = Passenger.States.Waiting
-
-                self.toUpdate.append(passenger)
-
-                # print('dispatched passenger ', self.time, p_from, '-->', p_to)
+                    # push the passenger to the delayed queue
+                    self.delayedPassengers.append(passenger)
         
 
         # if round(self.time) % 1700 == 0:
@@ -116,18 +132,20 @@ class SimulationScene:
                 # load next passenger in floor queue
                 for direction, passenger in self.queue[elevator.current]:
                     if direction == elevator.direction:
-                        elevator.board(passenger)
-                        self.controller.updateElevatorWeight(
-                            elevator.id, elevator.weight)
-
-                        passenger.state = Passenger.States.Passenger
-
-                        # remove passenger from queue
-                        self.queue[elevator.current].remove((direction, passenger))
-                        self.toUpdate.remove(passenger)
                         
-                        # simulate passenger pushing the floor button
-                        self.controller.floorSelect(elevator, passenger.route[passenger.route_index + 1])
+                        # attempt to board a passenger 
+                        if elevator.board(passenger):
+                            self.controller.updateElevatorWeight(
+                                elevator.id, elevator.weight)
+
+                            passenger.state = Passenger.States.Passenger
+
+                            # remove passenger from queue
+                            self.queue[elevator.current].remove((direction, passenger))
+                            self.toUpdate.remove(passenger)
+                            
+                            # simulate passenger pushing the floor button
+                            self.controller.floorSelect(elevator, passenger.route[passenger.route_index + 1])
 
             # off load passengers even when in loading state
             elif (elevator.state == Elevator.States.Offloading or elevator.state == Elevator.States.Loading
@@ -289,9 +307,14 @@ outputfile = filePrefix + '.json'
 
 passengerDumpFile = filePrefix + '.bin'
 
+print('Writing passenger dump file')
 with open(passengerDumpFile, 'wb') as f:
     pickle.dump(sc.passengers, f)
+print('Passenger dump written to: ', passengerDumpFile)
 
+print()
+
+print('Writing JSON output file')
 with open(outputfile, 'w') as f:
     json.dump({
         'log': sc.log,

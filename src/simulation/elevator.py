@@ -42,6 +42,7 @@ class Elevator:
         self.direction = self.Directions.Neutral
         self.distance = 0
         self.buttons = [False] * sp['floors']
+        self.maxWeight = 1200
 
 
     def dump(self):
@@ -88,6 +89,8 @@ class Elevator:
     # interface for people board the elevator
     def board(self, person):
         if (self.state == self.States.Loading):
+            # check if there is space on the elevator
+            if(self.weight + person.weight > self.maxWeight): return False
             self.weight += person.weight
             self.passengers.append(person)
             return True
