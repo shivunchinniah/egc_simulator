@@ -1,5 +1,3 @@
-
-from ast import Pass
 import math
 import queue
 import random
@@ -19,6 +17,7 @@ from elevator import *
 from passenger import *
 
 from simpleController import *
+from simpleRevisedRouteController import *
 
 # // -------- Simulation Constants --------
 
@@ -61,7 +60,17 @@ class SimulationScene:
         self.controller = controller
         self.prevState = None
         self.log = []
+        self.lastLoggedState = None
         self.delayedPassengers = []
+        self.floors = sp['floors']
+        self.throughput = {
+            'timestamps': [],
+            'demand': [],
+            'elevator': [],
+            'last': self.start_time,
+            'd_count': 0,
+            'e_count': 0,
+        }
 
 
 
@@ -81,10 +90,10 @@ class SimulationScene:
         p_to = passenger.route[passenger.route_index + 1]
         # trigger button event & add passenger to relevant queue
         if p_from < p_to:
-            self.controller.up(p_from)
+            if not self.controller.upButton[p_from]: self.controller.up(p_from)
             self.queue[p_from].append((Elevator.Directions.Up, passenger))
         else:
-            self.controller.down(p_from)
+            if not self.controller.downButton[p_from]: self.controller.down(p_from)
             self.queue[p_from].append(
                 (Elevator.Directions.Down, passenger))
 
@@ -110,6 +119,8 @@ class SimulationScene:
                     self.traffic_index]]
                 self.traffic_index += 1
 
+                self.throughput['d_count'] += 1
+
                 # first check if the passenger is idle
                 if(passenger.state == Passenger.States.Idle):
                     # push the passenger to the queue
@@ -124,6 +135,8 @@ class SimulationScene:
         #     # for e in self.elevators:
         #     #     print('--', e)
         #     print(self.dumpScene())
+
+
 
         # check if there are passengers to load or offload to and from the elevators
         for elevator in self.elevators:
@@ -146,8 +159,10 @@ class SimulationScene:
                             
                             # simulate passenger pushing the floor button
                             self.controller.floorSelect(elevator, passenger.route[passenger.route_index + 1])
+            
 
-            # off load passengers even when in loading state
+            # Offload passengers
+            # note: offload passengers even when in loading state
             elif (elevator.state == Elevator.States.Offloading or elevator.state == Elevator.States.Loading
                   ):  # check if offloading
                 # offload passengers
@@ -157,6 +172,7 @@ class SimulationScene:
                     if (elevator.current == p_dest):
                         # offload the passenger
                         elevator.leave(passenger)
+                        self.throughput['e_count'] += 1
                         passenger.state = Passenger.States.Idle
                         self.controller.updateElevatorWeight(
                             elevator.id, elevator.weight)
@@ -165,23 +181,66 @@ class SimulationScene:
         
             # update the elevator
             elevator.update(self.dt)
+        
+        
+        
+        
+        
+
 
         # update the controller
         self.controller.update()
+
+       
         
         for item in self.toUpdate:
             item.update(self.dt)
+
+        # # check if there is a queue on a floor but the buttons are off
+        # for floor_index in range(self.floors):
+        #     if len(self.queue[floor_index]) > 0 and self.controller.upButton[floor_index] == False and self.controller.downButton[floor_index] == False:
+        #         upPress = False
+        #         downPress = False
+        #         # print('debug', [x[0] for x in self.queue[floor_index]])
+        #         for direction, _ in self.queue[floor_index]:
+        #             if direction == Elevator.Directions.Up:
+        #                 self.controller.up(floor_index)
+        #                 upPress = True
+        #             else:
+        #                 self.controller.down(floor_index)
+        #                 downPress = True
+        #             if upPress and downPress: break
+
+        # # check if buttons are on but there is no queue
+        # for floor_index in range(self.floors):
+        #     if (self.controller.upButton[floor_index] == True or self.controller.downButton[floor_index] == True) and len(self.queue[floor_index]) < 1:
+        #         print('debug a problem', self.queue[floor_index], self.controller.downButton[floor_index], self.controller.upButton[floor_index])
 
         # finally update the time
         self.time = self.time + self.dt
 
         currentState = self.dumpScene()
         if self.prevState:
-            if self.prevState['elevators'] == currentState['elevators'] and self.prevState['buttons'] == currentState['buttons'] and self.prevState['queue'] == currentState['queue']:
+            # if  (currentState['time'] - self.lastLoggedState['time'])  >= 2:
+            if [elevator['state'] for elevator in self.prevState['elevators']] == [elevator['state'] for elevator in currentState['elevators']] and self.prevState['buttons'] == currentState['buttons'] and self.prevState['queue'] == currentState['queue']:
                 pass
             else: self.log.append(dict(currentState))
+            
+        else: self.lastLoggedState = currentState
         
         self.prevState = currentState
+
+
+        # check if time to evaluate throughput
+        # 60 seconds/min * 10min  = 600 seconds
+        if self.time  - self.throughput['last'] >= 600:
+            self.throughput['timestamps'].append(self.throughput['last'] + (600/2))
+            self.throughput['last'] = self.time
+            self.throughput['elevator'].append(self.throughput['e_count'] / 600)
+            self.throughput['demand'].append(self.throughput['d_count'] / 600)
+            self.throughput['e_count'] = 0
+            self.throughput['d_count'] = 0
+
 
 
 # // -------- Test Elevator  --------
@@ -264,7 +323,11 @@ if __name__ == '__main__':
     traffic_times = db['traffic_times']
     traffic_passengers = db['traffic_passengers']
     sp = db['simulation_params']
-    sp['elevators'] = 11
+    
+    
+    # sp['elevators'] = 15
+    sp['dt'] = 0.5
+    # sp['time_per_floor'] = 1
     
 
     print('Simulation Parameters: ', sp)
@@ -276,7 +339,12 @@ if __name__ == '__main__':
     #     print('--', elevator.__dict__)
 
     simpleController = SimpleController(elevators, sp['floors'])
-    sc = SimulationScene(sp, elevators, passengers, traffic_times, traffic_passengers, simpleController)
+    simpleRevisedRouteController = SimpleRevisedRouteController(elevators, sp['floors'])
+
+
+    controller = simpleRevisedRouteController
+
+    sc = SimulationScene(sp, elevators, passengers, traffic_times, traffic_passengers, controller)
 
 
     start = sp['start']
@@ -300,21 +368,21 @@ for passenger in sc.passengers:
     t_travel += passenger.rideTime
 
 
-filePrefix = 'out_p{}e{}f{}'.format(sp['passengers'], sp['elevators'], sp['floors'])
+filePrefix = 'out_p{}e{}f{}c{}'.format(sp['passengers'], sp['elevators'], sp['floors'], type(controller).__name__)
 
 outputfile = filePrefix + '.json'
 
 
 passengerDumpFile = filePrefix + '.bin'
 
-print('Writing passenger dump file')
+print('Writing passenger & throughput dump file')
 with open(passengerDumpFile, 'wb') as f:
-    pickle.dump(sc.passengers, f)
+    pickle.dump({'passengers': sc.passengers, 'throughput': sc.throughput}, f)
 print('Passenger dump written to: ', passengerDumpFile)
 
 print()
 
-print('Writing JSON output file')
+print('Writing JSON output file, rows:', len(sc.log))
 with open(outputfile, 'w') as f:
     json.dump({
         'log': sc.log,
@@ -322,15 +390,9 @@ with open(outputfile, 'w') as f:
         'distribution': db['distribution']
     }
         , f)
+print('Output file:', outputfile)
 
-# print('changes', len(sc.log))
+print('changes', len(sc.log))
 
 print('mean wait', t_wait / t_trips)
 print('total:', 'wait ->', t_wait, 'travel ->', t_travel)
-
-
-print('Output file:', outputfile)
-
-
-
-

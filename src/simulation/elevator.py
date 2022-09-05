@@ -90,6 +90,7 @@ class Elevator:
     def board(self, person):
         if (self.state == self.States.Loading):
             # check if there is space on the elevator
+            if(len(self.passengers) > 14): return False
             if(self.weight + person.weight > self.maxWeight): return False
             self.weight += person.weight
             self.passengers.append(person)
