@@ -106,6 +106,7 @@ class SimulationScene:
 
     def tick(self):
 
+
         # check if delayed passengers have reached their destination
         for passenger in self.delayedPassengers:
             if passenger.state == Passenger.States.Idle:
@@ -196,25 +197,33 @@ class SimulationScene:
         for item in self.toUpdate:
             item.update(self.dt)
 
-        # # check if there is a queue on a floor but the buttons are off
-        # for floor_index in range(self.floors):
-        #     if len(self.queue[floor_index]) > 0 and self.controller.upButton[floor_index] == False and self.controller.downButton[floor_index] == False:
-        #         upPress = False
-        #         downPress = False
-        #         # print('debug', [x[0] for x in self.queue[floor_index]])
-        #         for direction, _ in self.queue[floor_index]:
-        #             if direction == Elevator.Directions.Up:
-        #                 self.controller.up(floor_index)
-        #                 upPress = True
-        #             else:
-        #                 self.controller.down(floor_index)
-        #                 downPress = True
-        #             if upPress and downPress: break
+
+        floorLoading = [False] * self.floors
+        for elevator in self.elevators:
+            if elevator.state == Elevator.States.Loading:
+                floorLoading[elevator.current] = True
+
+
+        # check if there is a queue on a floor but the buttons are off
+        for floor_index in range(self.floors):
+            if floorLoading[floor_index] == False and len(self.queue[floor_index]) > 0 and self.controller.upButton[floor_index] == False and self.controller.downButton[floor_index] == False:
+                upPress = False
+                downPress = False
+                # print('debug', [x[0] for x in self.queue[floor_index]])
+                for direction, _ in self.queue[floor_index]:
+                    if direction == Elevator.Directions.Up:
+                        self.controller.up(floor_index)
+                        upPress = True
+                    else:
+                        self.controller.down(floor_index)
+                        downPress = True
+                    if upPress and downPress: break
 
         # # check if buttons are on but there is no queue
         # for floor_index in range(self.floors):
         #     if (self.controller.upButton[floor_index] == True or self.controller.downButton[floor_index] == True) and len(self.queue[floor_index]) < 1:
-        #         print('debug a problem', self.queue[floor_index], self.controller.downButton[floor_index], self.controller.upButton[floor_index])
+        #         self.controller.upButton[floor_index] = False
+        #         self.controller.downButton[floor_index] = False
 
         # finally update the time
         self.time = self.time + self.dt
@@ -325,9 +334,9 @@ if __name__ == '__main__':
     sp = db['simulation_params']
     
     
-    # sp['elevators'] = 15
+    sp['elevators'] = 16
     sp['dt'] = 0.5
-    # sp['time_per_floor'] = 1
+    sp['time_per_floor'] = 2
     
 
     print('Simulation Parameters: ', sp)
@@ -348,7 +357,8 @@ if __name__ == '__main__':
 
 
     start = sp['start']
-    end = sp['end']
+    # end = sp['end']
+    end = start + (2 * 60 * 60)
 
     for i in tqdm(range(int(( (end-start) ) / sp['dt']))):
         sc.tick()
