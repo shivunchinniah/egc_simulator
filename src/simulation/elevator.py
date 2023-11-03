@@ -64,15 +64,15 @@ class Elevator:
 
     # to String
     def __repr__(self):
-        return "id:{}, position:{}, current:{}, target:{}, speed:{}, onload:{}, offload:{}, state:{}, floor_height:{}, offload_timer:{}, onload_timer:{}, weight:{}, passengers:{}, distance:{}".format(
-            self.id, self.position, self.current, self.target, self.speed,
+        return "id:{}, direction:{}, position:{}, current:{}, target:{}, speed:{}, onload:{}, offload:{}, state:{}, floor_height:{}, offload_timer:{}, onload_timer:{}, weight:{}, passengers:{}, distance:{}".format(
+            self.id, self.direction, self.position, self.current, self.target, self.speed,
             self.onload, self.offload, self.state, self.floor_height,
             self.offload_timer, self.onload_timer, self.weight,
             len(self.passengers), self.distance)
 
     def __str__(self):
-        return "id:{}, position:{}, current:{}, target:{}, speed:{}, onload:{}, offload:{}, state:{}, floor_height:{}, offload_timer:{}, onload_timer:{}, weight:{}, passengers:{}, distance:{}".format(
-            self.id, self.position, self.current, self.target, self.speed,
+         return "id:{}, direction:{}, position:{}, current:{}, target:{}, speed:{}, onload:{}, offload:{}, state:{}, floor_height:{}, offload_timer:{}, onload_timer:{}, weight:{}, passengers:{}, distance:{}".format(
+            self.id, self.direction, self.position, self.current, self.target, self.speed,
             self.onload, self.offload, self.state, self.floor_height,
             self.offload_timer, self.onload_timer, self.weight,
             len(self.passengers), self.distance)

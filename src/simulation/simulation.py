@@ -18,6 +18,7 @@ from passenger import *
 
 from simpleController import *
 from simpleRevisedRouteController import *
+from optimisedDropOffController import *
 
 # // -------- Simulation Constants --------
 
@@ -322,7 +323,7 @@ if __name__ == '__main__':
     # elevatorTest()
 
     # load sim data
-    file = open('p1500e10f50.bin', 'rb')
+    file = open('p1500e10f80.bin', 'rb')
 
     db = pickle.load(file)
 
@@ -334,7 +335,7 @@ if __name__ == '__main__':
     sp = db['simulation_params']
     
     
-    sp['elevators'] = 16
+    sp['elevators'] = 20
     sp['dt'] = 0.5
     sp['time_per_floor'] = 2
     
@@ -349,16 +350,17 @@ if __name__ == '__main__':
 
     simpleController = SimpleController(elevators, sp['floors'])
     simpleRevisedRouteController = SimpleRevisedRouteController(elevators, sp['floors'])
+    optimisedDropOffController = OptimisedDropOffController(elevators, sp['floors'])
 
+    controller = optimisedDropOffController
 
-    controller = simpleRevisedRouteController
 
     sc = SimulationScene(sp, elevators, passengers, traffic_times, traffic_passengers, controller)
 
 
     start = sp['start']
-    # end = sp['end']
-    end = start + (2 * 60 * 60)
+    end = sp['end']
+    # end = start + (2 * 60 * 60)
 
     for i in tqdm(range(int(( (end-start) ) / sp['dt']))):
         sc.tick()
@@ -392,15 +394,15 @@ print('Passenger dump written to: ', passengerDumpFile)
 
 print()
 
-print('Writing JSON output file, rows:', len(sc.log))
-with open(outputfile, 'w') as f:
-    json.dump({
-        'log': sc.log,
-        'sp': sp,
-        'distribution': db['distribution']
-    }
-        , f)
-print('Output file:', outputfile)
+# print('Writing JSON output file, rows:', len(sc.log))
+# with open(outputfile, 'w') as f:
+#     json.dump({
+#         'log': sc.log,
+#         'sp': sp,
+#         'distribution': db['distribution']
+#     }
+#         , f)
+# print('Output file:', outputfile)
 
 print('changes', len(sc.log))
 

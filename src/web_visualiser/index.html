@@ -263,7 +263,7 @@
 
             const buildingWidth = 0.5 * canvas.width
 
-            const buildingX = (canvas.width - buildingWidth) / 8
+            const buildingX = (canvas.width - buildingWidth)  / 4
             const buildingY = (canvas.height - buildingHeight) / 2
 
             // draw building rectangle
@@ -312,6 +312,11 @@
                 ctx.fillStyle = 'black'
                 ctx.font = textSize + 'px sanserif'
                 ctx.fillText(queue[i], buildingWidth + buildingX + 3 * offset + 2*width, h)
+
+                // draw floor number
+                ctx.fillStyle = 'black'
+                ctx.font = textSize + 'px sanserif'
+                ctx.fillText((i + ":").padStart(3, '0'), buildingX - 3 * offset, h)
 
             }
 
